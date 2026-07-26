@@ -1,4 +1,4 @@
-module newsfilter
+module lumos
 
 go 1.24
 

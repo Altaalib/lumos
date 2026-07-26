@@ -128,7 +128,7 @@ func LoadReaderConfig() (ReaderConfig, error) {
 		return cfg, fmt.Errorf("TG_CHANNELS не должен быть пустым")
 	}
 
-	cfg.SessionFile = getEnv("TG_SESSION_FILE", "reader.session.json")
+	cfg.SessionFile = getEnv("TG_SESSION_FILE", "lumos-reader.session.json")
 	if cfg.Phone, err = requireEnv("TG_PHONE"); err != nil {
 		return cfg, err
 	}

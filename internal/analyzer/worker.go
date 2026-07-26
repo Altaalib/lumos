@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync"
 
-	"newsfilter/internal/storage"
+	"lumos/internal/storage"
 )
 
 // Runner связывает хранилище и LLM-провайдера и прогоняет один цикл

@@ -6,7 +6,7 @@
 
 # локальные креды и сессии
 .env
-*.session
+*.session*
 criteria.txt
 
 # IDE / OS

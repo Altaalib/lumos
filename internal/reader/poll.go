@@ -6,7 +6,7 @@ import (
 
 	"github.com/gotd/td/tg"
 
-	"newsfilter/internal/storage"
+	"lumos/internal/storage"
 )
 
 const historyPageSize = 100

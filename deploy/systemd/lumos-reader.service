@@ -1,0 +1,21 @@
+[Unit]
+Description=Lumos — reader (чтение Telegram-каналов)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lumos
+WorkingDirectory=/opt/lumos
+EnvironmentFile=/opt/lumos/.env
+ExecStart=/opt/lumos/bin/reader
+Restart=on-failure
+RestartSec=5
+
+# Первый запуск требует интерактивного ввода кода из Telegram — перед
+# включением сервиса выполнить один раз вручную из-под того же
+# пользователя: `sudo -u lumos /opt/lumos/bin/reader`, ввести код,
+# затем Ctrl+C и уже после этого `systemctl enable --now lumos-reader`.
+
+[Install]
+WantedBy=multi-user.target

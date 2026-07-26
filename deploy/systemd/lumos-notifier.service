@@ -1,0 +1,16 @@
+[Unit]
+Description=Lumos — notifier (отправка уведомлений ботом)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lumos
+WorkingDirectory=/opt/lumos
+EnvironmentFile=/opt/lumos/.env
+ExecStart=/opt/lumos/bin/notifier
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-# news-filter
+# lumos
 
 Персональный сервис фильтрации новостей из публичных Telegram-каналов:
 читает посты через юзер-сессию (gotd/td), прогоняет через LLM на предмет
@@ -6,8 +6,19 @@
 
 Три независимых сервиса (`reader`, `analyzer`, `notifier`), связанные
 только через таблицу `posts` в общей PostgreSQL — без брокера сообщений
-и без прямого взаимодействия между собой. Полное описание архитектуры —
-в `docs/architecture.md`.
+и без прямого взаимодействия между собой.
+
+## Документация
+
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — самое важное:
+  что обязательно нужно заполнить перед первым запуском, откуда брать
+  каждое значение
+- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) — системные и Go-зависимости,
+  зачем каждая нужна и как заменить LLM-провайдера
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — деплой: Docker Compose,
+  systemd, локальный запуск
+- [docs/architecture.md](docs/architecture.md) — архитектура, схема БД,
+  обоснование решений
 
 ## Структура
 
@@ -21,47 +32,28 @@
 /internal/notifier   — Telegram Bot API клиент
 /internal/config     — конфигурация из переменных окружения
 /migrations          — SQL-миграции (golang-migrate)
-/docs                — архитектура
+/deploy              — Dockerfile'ы, docker-compose для прода, systemd-юниты
+/docs                — документация
 criteria.txt         — критерии важности постов (свободный текст, не в git)
 ```
 
 ## Быстрый старт
 
-1. Скопировать `.env.example` в `.env` и заполнить значения (описание
-   каждой переменной — прямо в файле).
+Подробности и что именно заполнять — в
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md). Коротко:
 
-2. Поднять локальный Postgres:
+```
+cp .env.example .env     # заполнить значения
+make up                  # локальный Postgres
+export $(cat .env | xargs) && make migrate-up
+go mod tidy && make build
+./bin/reader              # первый запуск — интерактивный код из Telegram
+./bin/analyzer
+./bin/notifier
+```
 
-   ```
-   make up
-   ```
-
-3. Применить миграции ([golang-migrate](https://github.com/golang-migrate/migrate) должен быть установлен):
-
-   ```
-   export $(cat .env | xargs)
-   make migrate-up
-   ```
-
-4. Подтянуть зависимости и собрать:
-
-   ```
-   go mod tidy
-   make build
-   ```
-
-5. Запустить сервисы (в трёх разных терминалах, порядок не важен):
-
-   ```
-   ./bin/reader
-   ./bin/analyzer
-   ./bin/notifier
-   ```
-
-   При первом запуске `reader` попросит код подтверждения из Telegram
-   прямо в терминале (авторизация под номером из `TG_PHONE`) — это
-   разовое действие, дальше сессия сохраняется в файл `TG_SESSION_FILE`
-   и повторных логинов не требует.
+Продовый деплой (Docker или systemd) — в
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Тесты
 
@@ -76,16 +68,6 @@ API (MTProto, Bot API, LLM) юнит-тестами не покрыты — дл
 интеграционные тесты с реальным Postgres/сетью, это можно добавить
 следующим шагом (например через `docker-compose` + build tag
 `integration`).
-
-## Переменные окружения
-
-Полный список с описанием — в `.env.example`. Коротко:
-
-| Сервис | Обязательные | Опциональные (со значением по умолчанию) |
-|---|---|---|
-| reader | `DATABASE_URL`, `TG_APP_ID`, `TG_APP_HASH`, `TG_PHONE`, `TG_CHANNELS` | `TG_PASSWORD` (""), `TG_SESSION_FILE` (reader.session.json), `READER_POLL_INTERVAL` (2m) |
-| analyzer | `DATABASE_URL`, `LLM_API_KEY` | `LLM_BASE_URL` (api.openai.com/v1), `LLM_MODEL` (gpt-4o-mini), `LLM_TIMEOUT` (30s), `CRITERIA_FILE` (criteria.txt), `ANALYZER_WORKERS` (4), `ANALYZER_BATCH_SIZE` (20), `ANALYZER_POLL_INTERVAL` (30s) |
-| notifier | `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | `NOTIFIER_BATCH_SIZE` (20), `NOTIFIER_POLL_INTERVAL` (15s) |
 
 ## Статус БД поста
 

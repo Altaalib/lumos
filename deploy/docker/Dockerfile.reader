@@ -1,0 +1,19 @@
+# Собирать из корня репозитория:
+#   docker build -f deploy/docker/Dockerfile.reader -t lumos-reader .
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/reader ./cmd/reader
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=builder /out/reader ./reader
+# Файл сессии MTProto должен жить на постоянном томе — иначе после
+# каждого пересоздания контейнера reader будет заново просить код
+# подтверждения. См. docs/DEPLOYMENT.md.
+VOLUME ["/app/data"]
+ENV TG_SESSION_FILE=/app/data/lumos-reader.session.json
+ENTRYPOINT ["./reader"]

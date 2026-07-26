@@ -3,18 +3,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: newsfilter
-      POSTGRES_PASSWORD: newsfilter
-      POSTGRES_DB: newsfilter
+      POSTGRES_USER: lumos
+      POSTGRES_PASSWORD: lumos
+      POSTGRES_DB: lumos
     ports:
       - "5432:5432"
     volumes:
-      - newsfilter-pgdata:/var/lib/postgresql/data
+      - lumos-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U newsfilter"]
+      test: ["CMD-SHELL", "pg_isready -U lumos"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  newsfilter-pgdata:
+  lumos-pgdata:

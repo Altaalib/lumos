@@ -1,0 +1,88 @@
+# Полный стек для деплоя (VPS, домашний сервер и т.д.). Отличается от
+# корневого docker-compose.yml (тот — только Postgres для локальной
+# разработки, когда сервисы запускаются через `go run`/`make build`
+# напрямую на хосте).
+#
+# Запуск:
+#   docker compose -f deploy/docker/docker-compose.prod.yml --env-file ../../.env up -d --build
+#
+# Миграции (один раз перед первым запуском и после каждого обновления
+# схемы):
+#   docker compose -f deploy/docker/docker-compose.prod.yml --env-file ../../.env run --rm migrate
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lumos
+      POSTGRES_PASSWORD: lumos
+      POSTGRES_DB: lumos
+    volumes:
+      - lumos-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    profiles: ["tools"]
+    volumes:
+      - ../../migrations:/migrations:ro
+    command: ["-path", "/migrations", "-database", "postgres://lumos:lumos@postgres:5432/lumos?sslmode=disable", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  reader:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.reader
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgres://lumos:lumos@postgres:5432/lumos?sslmode=disable
+    volumes:
+      - lumos-reader-session:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # При самом первом запуске reader попросит код подтверждения в
+    # терминале — этот контейнер нужно один раз запустить с
+    # `docker compose run --rm reader` (интерактивно), а не `up -d`,
+    # чтобы ввести код. Дальше сессия сохранена на volume, и `up -d`
+    # работает без интерактива.
+    stdin_open: true
+    tty: true
+
+  analyzer:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.analyzer
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgres://lumos:lumos@postgres:5432/lumos?sslmode=disable
+    volumes:
+      - ../../criteria.txt:/app/criteria.txt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notifier:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.notifier
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      DATABASE_URL: postgres://lumos:lumos@postgres:5432/lumos?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  lumos-pgdata:
+  lumos-reader-session:

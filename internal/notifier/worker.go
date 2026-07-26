@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"newsfilter/internal/storage"
+	"lumos/internal/storage"
 )
 
 // Runner связывает хранилище и Bot API и прогоняет один цикл отправки

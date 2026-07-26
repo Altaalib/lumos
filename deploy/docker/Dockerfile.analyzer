@@ -1,0 +1,17 @@
+# Собирать из корня репозитория:
+#   docker build -f deploy/docker/Dockerfile.analyzer -t lumos-analyzer .
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/analyzer ./cmd/analyzer
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=builder /out/analyzer ./analyzer
+# criteria.txt намеренно НЕ копируется в образ — критерии важности
+# должны редактироваться без пересборки (см. architecture.md).
+# Монтировать как volume при запуске, см. docs/DEPLOYMENT.md.
+ENTRYPOINT ["./analyzer"]

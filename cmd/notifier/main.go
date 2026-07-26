@@ -7,9 +7,9 @@ import (
 	"syscall"
 	"time"
 
-	"newsfilter/internal/config"
-	"newsfilter/internal/notifier"
-	"newsfilter/internal/storage"
+	"lumos/internal/config"
+	"lumos/internal/notifier"
+	"lumos/internal/storage"
 )
 
 func main() {
