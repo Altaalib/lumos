@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS read_checkpoints;
+DROP TABLE IF EXISTS posts;

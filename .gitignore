@@ -1,0 +1,20 @@
+# бинарники
+/bin/
+/reader
+/analyzer
+/notifier
+
+# локальные креды и сессии
+.env
+*.session
+criteria.txt
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# тестовые артефакты
+*.test
+*.out
+coverage.txt
