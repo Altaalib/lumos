@@ -29,7 +29,12 @@ func (r *Runner) RunOnce(ctx context.Context) (int, error) {
 
 	sent := 0
 	for _, p := range posts {
-		if err := r.Bot.Send(p.Text); err != nil {
+		err := r.Bot.Forward(p.ChannelUsername, p.MessageID)
+		if err != nil {
+			log.Printf("notifier: пост %d: форвард не удался (%v), пробую отправить текстом", p.ID, err)
+			err = r.Bot.Send(p.Text)
+		}
+		if err != nil {
 			log.Printf("notifier: пост %d: ошибка отправки: %v, возвращаю в очередь", p.ID, err)
 			if reqErr := r.Store.RequeueSend(context.Background(), p.ID); reqErr != nil {
 				log.Printf("notifier: пост %d: не удалось вернуть в очередь: %v", p.ID, reqErr)

@@ -16,10 +16,10 @@ down:
 	docker compose down
 
 migrate-up:
-	migrate -path migrations -database "$(DATABASE_URL)" up
+	set -a && . ./.env && set +a && migrate -path migrations -database "$$DATABASE_URL" up
 
 migrate-down:
-	migrate -path migrations -database "$(DATABASE_URL)" down 1
+	set -a && . ./.env && set +a && migrate -path migrations -database "$$DATABASE_URL" down 1
 
 run-reader:
 	go run ./cmd/reader

@@ -11,6 +11,56 @@ import (
 
 const historyPageSize = 100
 
+// fetchInitialMessages — версия для самого первого опроса канала,
+// когда чекпоинта ещё нет. В отличие от fetchNewMessages, не идёт в
+// глубину истории постранично, а забирает только limit самых свежих
+// сообщений одним запросом (OffsetID=0 — "начать с самых новых").
+// Так первый запуск не утаскивает в БД всю историю канала целиком —
+// только несколько последних постов, дальше reader продолжает с этой
+// точки обычным порядком через fetchNewMessages.
+//
+// limit <= 0 — особый случай "без бэкафилла": в Telegram всё равно
+// нужно сходить за одним сообщением, чтобы узнать текущий последний
+// ID и сразу поставить на него чекпоинт (иначе не от чего будет
+// отталкиваться на следующем цикле) — но само это сообщение в
+// результат не попадает, вызывающий код (PollChannel) его не
+// сохраняет.
+func fetchInitialMessages(ctx context.Context, api *tg.Client, peer tg.InputPeerClass, limit int) ([]*tg.Message, error) {
+	apiLimit := limit
+	if apiLimit <= 0 {
+		apiLimit = 1
+	}
+
+	history, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+		Peer:     peer,
+		OffsetID: 0,
+		Limit:    apiLimit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("запрос последних сообщений: %w", err)
+	}
+
+	modified, ok := history.AsModified()
+	if !ok {
+		return nil, nil
+	}
+
+	page := modified.GetMessages()
+	var result []*tg.Message
+	for _, mc := range page {
+		if m, ok := mc.(*tg.Message); ok {
+			result = append(result, m)
+		}
+	}
+
+	// Страница приходит от новых к старым — разворачиваем в
+	// хронологический порядок, как и fetchNewMessages.
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+	return result, nil
+}
+
 // fetchNewMessages запрашивает у Telegram все сообщения канала с ID
 // больше afterID, постранично (по historyPageSize штук за раз),
 // начиная с самых свежих и двигаясь вглубь истории, пока не упрётся в
@@ -84,19 +134,31 @@ func fetchNewMessages(ctx context.Context, api *tg.Client, peer tg.InputPeerClas
 // чекпоинт, запрашивает новые сообщения, сохраняет посты с текстом и
 // продвигает чекпоинт (см. architecture.md, раздел "Транзакции и
 // чекпоинты"). Возвращает число сохранённых постов.
-func PollChannel(ctx context.Context, client *Client, store *storage.Store, username string) (int, error) {
+//
+// initialBackfillLimit — сколько последних постов забрать при самом
+// первом запуске для канала (когда чекпоинта ещё нет), вместо всей
+// доступной истории. 0 — не сохранять вообще ничего из прошлого,
+// начать полностью с чистого листа с этого момента.
+func PollChannel(ctx context.Context, client *Client, store *storage.Store, username string, initialBackfillLimit int) (int, error) {
 	channel, err := client.ResolveChannel(ctx, username)
 	if err != nil {
 		return 0, err
 	}
 	channelID := channel.ID()
 
-	lastID, _, err := store.LastMessageID(ctx, channelID)
+	lastID, hadCheckpoint, err := store.LastMessageID(ctx, channelID)
 	if err != nil {
 		return 0, err
 	}
 
-	messages, err := fetchNewMessages(ctx, client.raw.API(), channel.InputPeer(), int(lastID))
+	var messages []*tg.Message
+	skipSaving := false
+	if hadCheckpoint {
+		messages, err = fetchNewMessages(ctx, client.raw.API(), channel.InputPeer(), int(lastID))
+	} else {
+		messages, err = fetchInitialMessages(ctx, client.raw.API(), channel.InputPeer(), initialBackfillLimit)
+		skipSaving = initialBackfillLimit <= 0
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -110,14 +172,18 @@ func PollChannel(ctx context.Context, client *Client, store *storage.Store, user
 		if int64(m.ID) > maxID {
 			maxID = int64(m.ID)
 		}
+		if skipSaving {
+			continue
+		}
 		text, ok := ExtractText(m)
 		if !ok {
 			continue
 		}
 		posts = append(posts, storage.NewPost{
-			ChannelID: channelID,
-			MessageID: int64(m.ID),
-			Text:      text,
+			ChannelID:       channelID,
+			MessageID:       int64(m.ID),
+			Text:            text,
+			ChannelUsername: username,
 		})
 	}
 

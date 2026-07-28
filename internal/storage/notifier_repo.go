@@ -9,8 +9,10 @@ import (
 
 // ReadyPost — пост, атомарно захваченный notifier'ом для отправки.
 type ReadyPost struct {
-	ID   int64
-	Text string
+	ID              int64
+	Text            string
+	MessageID       int64
+	ChannelUsername string
 }
 
 // ClaimReadyPosts атомарно захватывает до limit постов со
@@ -25,7 +27,7 @@ func (s *Store) ClaimReadyPosts(ctx context.Context, limit int) ([]ReadyPost, er
 		     LIMIT $1
 		     FOR UPDATE SKIP LOCKED
 		 )
-		 RETURNING id, text`,
+		 RETURNING id, text, message_id, channel_username`,
 		limit,
 	)
 	if err != nil {

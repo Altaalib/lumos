@@ -9,9 +9,10 @@ import (
 
 // NewPost — пост, ещё не сохранённый в БД (данные из reader'а).
 type NewPost struct {
-	ChannelID int64
-	MessageID int64
-	Text      string
+	ChannelID       int64
+	MessageID       int64
+	Text            string
+	ChannelUsername string
 }
 
 // LastMessageID возвращает последний сохранённый message_id для
@@ -53,10 +54,10 @@ func (s *Store) SavePostsAndCheckpoint(ctx context.Context, channelID int64, pos
 
 	for _, p := range posts {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO posts (channel_id, message_id, text)
-			 VALUES ($1, $2, $3)
+			`INSERT INTO posts (channel_id, message_id, text, channel_username)
+			 VALUES ($1, $2, $3, $4)
 			 ON CONFLICT (channel_id, message_id) DO NOTHING`,
-			p.ChannelID, p.MessageID, p.Text,
+			p.ChannelID, p.MessageID, p.Text, p.ChannelUsername,
 		)
 		if err != nil {
 			return fmt.Errorf("вставка поста channel=%d message=%d: %w", p.ChannelID, p.MessageID, err)

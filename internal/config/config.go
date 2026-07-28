@@ -98,6 +98,11 @@ type ReaderConfig struct {
 	Channels []string
 
 	PollInterval time.Duration
+
+	// Сколько последних постов забрать при самом первом запуске для
+	// канала (когда чекпоинта ещё нет), вместо всей доступной истории.
+	// 0 — начать с чистого листа, не сохранять ничего из прошлого.
+	InitialBackfillLimit int
 }
 
 // LoadReaderConfig читает конфигурацию reader'а из окружения.
@@ -134,6 +139,9 @@ func LoadReaderConfig() (ReaderConfig, error) {
 	}
 	cfg.Password = getEnv("TG_PASSWORD", "")
 	if cfg.PollInterval, err = getEnvDuration("READER_POLL_INTERVAL", 2*time.Minute); err != nil {
+		return cfg, err
+	}
+	if cfg.InitialBackfillLimit, err = getEnvInt("READER_INITIAL_LIMIT", 5); err != nil {
 		return cfg, err
 	}
 	return cfg, nil

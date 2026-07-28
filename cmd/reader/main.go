@@ -29,14 +29,14 @@ func main() {
 
 	client := reader.NewClient(cfg.AppID, cfg.AppHash, cfg.SessionFile, cfg.Phone, cfg.Password)
 
-	log.Printf("reader: запущен, каналы=%v, интервал=%s", cfg.Channels, cfg.PollInterval)
+	log.Printf("reader: запущен, каналы=%v, интервал=%s, лимит бэкафилла=%d", cfg.Channels, cfg.PollInterval, cfg.InitialBackfillLimit)
 
 	err = client.Run(ctx, func(ctx context.Context, c *reader.Client) error {
 		log.Println("reader: подключение к Telegram установлено")
 
 		pollAll := func() {
 			for _, username := range cfg.Channels {
-				n, err := reader.PollChannel(ctx, c, store, username)
+				n, err := reader.PollChannel(ctx, c, store, username, cfg.InitialBackfillLimit)
 				if err != nil {
 					log.Printf("reader: канал @%s: %v", username, err)
 					continue
