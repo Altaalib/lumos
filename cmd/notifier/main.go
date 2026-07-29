@@ -9,6 +9,7 @@ import (
 
 	"lumos/internal/config"
 	"lumos/internal/notifier"
+	"lumos/internal/reader"
 	"lumos/internal/storage"
 )
 
@@ -32,26 +33,42 @@ func main() {
 		log.Fatalf("notifier: инициализация Bot API: %v", err)
 	}
 
-	runner := &notifier.Runner{
-		Store:     store,
-		Bot:       bot,
-		BatchSize: cfg.BatchSize,
-	}
+	// MTProto-клиент нужен для настоящего форварда постов (см.
+	// internal/reader/client.go, ForwardToSelf) — Bot API для этого не
+	// подходит, т.к. Telegram не позволяет ботам форвардить из
+	// каналов, где бот не состоит участником.
+	mtproto := reader.NewClient(cfg.AppID, cfg.AppHash, cfg.SessionFile, cfg.Phone, cfg.Password)
 
 	log.Printf("notifier: запущен, интервал=%s, батч=%d, чат=%d", cfg.PollInterval, cfg.BatchSize, cfg.ChatID)
 
-	ticker := time.NewTicker(cfg.PollInterval)
-	defer ticker.Stop()
+	err = mtproto.Run(ctx, func(ctx context.Context, c *reader.Client) error {
+		log.Println("notifier: подключение к Telegram (MTProto) установлено")
 
-	runCycle(ctx, runner)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("notifier: получен сигнал остановки, завершаюсь")
-			return
-		case <-ticker.C:
-			runCycle(ctx, runner)
+		runner := &notifier.Runner{
+			Store:      store,
+			MTProto:    c,
+			Bot:        bot,
+			GroupTitle: cfg.ForwardGroup,
+			BatchSize:  cfg.BatchSize,
 		}
+
+		runCycle(ctx, runner)
+
+		ticker := time.NewTicker(cfg.PollInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("notifier: получен сигнал остановки, завершаюсь")
+				return nil
+			case <-ticker.C:
+				runCycle(ctx, runner)
+			}
+		}
+	})
+	if err != nil {
+		log.Fatalf("notifier: %v", err)
 	}
 }
 

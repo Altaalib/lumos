@@ -200,6 +200,27 @@ func LoadAnalyzerConfig() (AnalyzerConfig, error) {
 type NotifierConfig struct {
 	DatabaseURL string
 
+	// MTProto-доступ для форварда постов — тот же Telegram-аккаунт,
+	// что у reader (те же значения TG_APP_ID/TG_APP_HASH/TG_PHONE/
+	// TG_PASSWORD), но свой файл сессии по умолчанию. Нужен, потому что
+	// только обычный пользовательский аккаунт может переслать пост из
+	// канала, где он подписчик — Bot API для чужих публичных каналов,
+	// куда бота не добавить, для форварда не подходит в принципе (см.
+	// docs/CONFIGURATION.md).
+	AppID       int
+	AppHash     string
+	Phone       string
+	Password    string
+	SessionFile string
+
+	// Точное название группы (как оно есть в Telegram), куда
+	// форвардятся отобранные посты. Аккаунт из TG_PHONE должен уже
+	// состоять в этой группе.
+	ForwardGroup string
+
+	// Bot API — используется только как запасной вариант, если форвард
+	// через MTProto не удался (например, пост в канале с тех пор
+	// удалили) — тогда отправляется обычным текстом от бота.
 	BotToken string
 	ChatID   int64
 
@@ -215,6 +236,33 @@ func LoadNotifierConfig() (NotifierConfig, error) {
 	if cfg.DatabaseURL, err = requireEnv("DATABASE_URL"); err != nil {
 		return cfg, err
 	}
+
+	appIDStr, err := requireEnv("TG_APP_ID")
+	if err != nil {
+		return cfg, err
+	}
+	cfg.AppID, err = strconv.Atoi(appIDStr)
+	if err != nil {
+		return cfg, fmt.Errorf("TG_APP_ID должен быть целым числом: %w", err)
+	}
+	if cfg.AppHash, err = requireEnv("TG_APP_HASH"); err != nil {
+		return cfg, err
+	}
+	if cfg.Phone, err = requireEnv("TG_PHONE"); err != nil {
+		return cfg, err
+	}
+	cfg.Password = getEnv("TG_PASSWORD", "")
+	// По умолчанию — свой файл, отдельный от reader'а (два процесса не
+	// должны одновременно писать в один и тот же файл сессии). Можно
+	// нарочно указать тот же файл, что и у reader (TG_SESSION_FILE),
+	// тогда повторный интерактивный логин не понадобится вообще —
+	// сессия уже авторизована. Компромисс: очень редкий, но не нулевой
+	// риск гонки при одновременной записи файла двумя процессами.
+	cfg.SessionFile = getEnv("TG_NOTIFIER_SESSION_FILE", "lumos-notifier.session.json")
+	if cfg.ForwardGroup, err = requireEnv("TG_FORWARD_GROUP"); err != nil {
+		return cfg, err
+	}
+
 	if cfg.BotToken, err = requireEnv("TELEGRAM_BOT_TOKEN"); err != nil {
 		return cfg, err
 	}

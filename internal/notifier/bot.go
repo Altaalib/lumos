@@ -2,13 +2,18 @@ package notifier
 
 import (
 	"fmt"
-	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // Bot — тонкая обёртка над Bot API для отправки уведомлений в один
-// чат (личку пользователя).
+// чат (личку пользователя). Используется только как запасной вариант
+// (обычный текст), когда настоящий форвард через MTProto
+// (internal/reader.Client.ForwardToSelf) не удался — сам Bot API не
+// может форвардить посты из каналов, где бот не состоит участником
+// (ограничение Telegram с 2017 года, не решается на уровне кода), а
+// добавить бота в чужой публичный канал, которым не управляешь,
+// нельзя в принципе.
 type Bot struct {
 	api    *tgbotapi.BotAPI
 	chatID int64
@@ -23,36 +28,11 @@ func NewBot(token string, chatID int64) (*Bot, error) {
 	return &Bot{api: api, chatID: chatID}, nil
 }
 
-// Send отправляет обычное текстовое сообщение в настроенный чат — как
-// fallback, если по какой-то причине форвард недоступен (например,
-// сообщение в канале с тех пор удалено).
+// Send отправляет обычное текстовое сообщение в настроенный чат.
 func (b *Bot) Send(text string) error {
 	msg := tgbotapi.NewMessage(b.chatID, FormatMessage(text))
 	if _, err := b.api.Send(msg); err != nil {
 		return fmt.Errorf("отправка сообщения через Bot API: %w", err)
-	}
-	return nil
-}
-
-// Forward пересылает оригинальный пост из публичного канала в
-// настроенный чат — полноценный репост со всеми медиа, форматированием
-// и пометкой "Forwarded from", а не пересказ текстом.
-//
-// ForwardConfig из библиотеки здесь не используется: её поле
-// FromChannelUsername существует, но фактически не сериализуется в
-// запрос в этой версии библиотеки (используется только числовой
-// FromChatID) — поэтому запрос собирается вручную через
-// bot.MakeRequest с "@username" в качестве from_chat_id, это
-// стабильно работает для публичных каналов без каких-либо
-// дополнительных прав у бота.
-func (b *Bot) Forward(channelUsername string, messageID int64) error {
-	params := tgbotapi.Params{
-		"chat_id":      strconv.FormatInt(b.chatID, 10),
-		"from_chat_id": "@" + channelUsername,
-		"message_id":   strconv.FormatInt(messageID, 10),
-	}
-	if _, err := b.api.MakeRequest("forwardMessage", params); err != nil {
-		return fmt.Errorf("форвард поста через Bot API: %w", err)
 	}
 	return nil
 }

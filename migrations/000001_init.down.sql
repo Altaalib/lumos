@@ -1,3 +1,2 @@
-DELETE FROM read_checkpoints;
-DELETE FROM posts;
-COMMIT;
+DROP TABLE IF EXISTS read_checkpoints;
+DROP TABLE IF EXISTS posts;

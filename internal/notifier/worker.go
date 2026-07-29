@@ -4,18 +4,20 @@ import (
 	"context"
 	"log"
 
+	"lumos/internal/reader"
 	"lumos/internal/storage"
 )
 
-// Runner связывает хранилище и Bot API и прогоняет один цикл отправки
-// уведомлений. В отличие от analyzer'а, отдельный пул воркеров тут не
-// нужен — Bot API сам ограничивает частоту отправки сообщений (см.
-// architecture.md, раздел "Конкурентность внутри сервисов"), поэтому
-// посты отправляются последовательно.
+// Runner связывает хранилище, MTProto-клиент (для настоящего форварда)
+// и Bot API (запасной вариант, текстом) и прогоняет один цикл отправки
+// уведомлений. Посты отправляются последовательно, без отдельного
+// worker pool — и MTProto, и Bot API сами ограничивают частоту.
 type Runner struct {
-	Store     *storage.Store
-	Bot       *Bot
-	BatchSize int
+	Store      *storage.Store
+	MTProto    *reader.Client
+	Bot        *Bot
+	GroupTitle string
+	BatchSize  int
 }
 
 // RunOnce захватывает пачку постов, готовых к отправке
@@ -29,7 +31,7 @@ func (r *Runner) RunOnce(ctx context.Context) (int, error) {
 
 	sent := 0
 	for _, p := range posts {
-		err := r.Bot.Forward(p.ChannelUsername, p.MessageID)
+		err := r.MTProto.ForwardToGroup(ctx, p.ChannelUsername, int(p.MessageID), r.GroupTitle)
 		if err != nil {
 			log.Printf("notifier: пост %d: форвард не удался (%v), пробую отправить текстом", p.ID, err)
 			err = r.Bot.Send(p.Text)
